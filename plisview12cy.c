@@ -20,6 +20,9 @@
 
 #include <sys/time.h>
 
+
+#define FREE_DATA(to) do { for (j = 0; j < to; j++) { free(data[j]); data[j] = NULL; } } while(0);
+
 #define TIMES_TO_WRITE_SPK  (100000) //(3000)
 
 
@@ -57,18 +60,18 @@ int EN_RANGE[4][4] = {{851, 973, 851, 973}, {1572, 1684, 1728, 1852}, {1903, 202
 cairo_surface_t *surface1 = NULL;
 
 static struct {
-	char *name_to_read;
-	int fd_read;
-	FILE *fd_Fread;
-	int readpos;
-	gint sb_context_id;
+    char *name_to_read;
+    int fd_read;
+    FILE *fd_Fread;
+    int readpos;
+    gint sb_context_id;
 	
-	char *name_to_save;
+    char *name_to_save;
 } files;
 
 int lengthof(char *str)
 {
-	int i=0;
+    int i=0;
 	
 	while (*(str++) != '\0')
 		i++;
@@ -1605,295 +1608,312 @@ static void ydown_cb(GtkWidget *widget, gpointer   user_data)
 
 int main(int argc, char *argv[])
 {
-	printf("%d, FT = %d\n", SIZEOF_DATA(FILETYPE), FILETYPE);
-	
-	int i, r;
+    printf("%d, FT = %d\n", SIZEOF_DATA(FILETYPE), FILETYPE);
+    
+    if (argc < 3) {
+	fprintf(stderr, "The program should be started like followed: %s -o NAME_TO_SAVE\n", argv[0]);
+	exit(-1);
+    }
+
+    int i = 0, j = 0;
+    int r = 0;
     int opt;
 	
-	for(i=0; i<4; i++) {
-		data[i] = (int *)malloc(SIZEOF_DATA(FILETYPE)/2*sizeof(int *));
-		if(data[i] == NULL) {
-			printf("Error in calloc data\n");
-			exit(1);
-		}
+    for (i = 0; i < 4; i++) {
+	data[i] = (int *)malloc(SIZEOF_DATA(FILETYPE)/2*sizeof(int *));
+	if (data[i] == NULL) {
+	    FREE_DATA(i);
+
+	    fprintf(stderr, "Error in calloc data\n");
+	    exit(-1);
 	}
+    }
 	
-	scale_opt.x_range = SIZEOF_DATA(FILETYPE)/2;
-	scale_opt.x = 0;
+    scale_opt.x_range = SIZEOF_DATA(FILETYPE)/2;
+    scale_opt.x = 0;
     scale_opt.y = 0;
     scale_opt.y_range = 8200-7100;
     scale_opt.y_up = 0;
 	
-	files.name_to_save = (char *)malloc(40*sizeof(char));
-	if(files.name_to_save == NULL) {
-		printf("Error in calloc name_to_save\n");
-		exit(1);
-	}
-	//strcpy(name_to_save, argv[1]);
-	files.name_to_save = g_strdup_printf("./spks/%s", argv[1]);
+    files.name_to_save = (char *)malloc(128*sizeof(char));
+    if(files.name_to_save == NULL) {
+	FREE_DATA(4);
+
+	fprintf(stderr,"Error in calloc name_to_save\n");
+	exit(-1);
+    }
+    //strcpy(name_to_save, argv[1]);
+    //files.name_to_save = g_strdup_printf("./spks/%s", argv[1]);
 	
-    while((opt = getopt(argc, argv, "o:t:r:d:g:")) != -1) {
-        switch(opt) {
-            case 'o':
-                files.name_to_save = g_strdup_printf("./spks/%s", optarg);
+    while ( (opt = getopt(argc, argv, "o:t:r:d:g:")) != -1 ) {
+      switch (opt) {
+      case 'o':
+	  if (strlen(optarg) >= 128) {
+	      fprintf(stderr, "Filename should be shroter\n");
+	      FREE_DATA(4);
+	      free(files.name_to_save);
+	      files.name_to_save = NULL;
+	      exit(-1);
+	  }
+	  files.name_to_save = g_strdup_printf("./spks/%s", optarg);
                 
-                break;
-            case 't':
-                acq_time = atoi(optarg);
+	  break;
+      case 't':
+	  acq_time = atoi(optarg);
             
-                break;
-            case 'r':
-                for(i=0; i<4; i++) {
-                    rangeset[i] = atoi(optarg);
-                }
+	  break;
+      case 'r':
+	  for (i = 0; i < 4; i++) {
+	      rangeset[i] = atoi(optarg);
+	  }
                 
-                break;
-            case 'd':
-                delay = atoi(optarg);
+	  break;
+      case 'd':
+	  delay = atoi(optarg);
             
-                break;
-            case 'g':
-                goodness_lim = atoi(optarg);
+	  break;
+      case 'g':
+	  goodness_lim = atoi(optarg);
             
-                break;
-            default:
-                abort();
-        }
+	  break;
+      default:
+	  abort();
+      }
     }
     
     printf("File to save: %s\n", files.name_to_save);
     
 	
-	GtkWidget *graph_area1, *graph_area2, *graph_area3, *graph_area4, *main_hbox, *vbox_graph, *button_vbox, *button_read, *button_write;
-	GtkWidget *button_reset,  *button_coinc_on, *button_coinc_off, *button_delay, *button_test, *button_save_to, *button_read_once;
-	GtkWidget *table_button, *table_readfile, *table_button_zoom;
-	GtkWidget *scale_zoom, *button_rghtzoom, *button_leftzoom, *button_yzoom, *button_unzoom, *button_yup, *button_ydown;
-	GtkAdjustment *adjust_scale;
-	GtkWidget *hr1, *hr2;
-	GtkWidget *button_readfile, *button_readfile_next, *image_readfile_next, *button_readfile_prev, *image_readfile_prev;
-	GtkWidget *view;
-	GtkTextBuffer *buffer_calc;
+    GtkWidget *graph_area1, *graph_area2, *graph_area3, *graph_area4, *main_hbox, *vbox_graph, *button_vbox, *button_read, *button_write;
+    GtkWidget *button_reset,  *button_coinc_on, *button_coinc_off, *button_delay, *button_test, *button_save_to, *button_read_once;
+    GtkWidget *table_button, *table_readfile, *table_button_zoom;
+    GtkWidget *scale_zoom, *button_rghtzoom, *button_leftzoom, *button_yzoom, *button_unzoom, *button_yup, *button_ydown;
+    GtkAdjustment *adjust_scale;
+    GtkWidget *hr1, *hr2;
+    GtkWidget *button_readfile, *button_readfile_next, *image_readfile_next, *button_readfile_prev, *image_readfile_prev;
+    GtkWidget *view;
+    GtkTextBuffer *buffer_calc;
     gchar *tempstr;
 	
-	r = cyusb_open();
+    r = cyusb_open();
 
-	if ( r < 0 ) {
-	   perror("Error opening library\n");
-	}
-	else if ( r == 0 ) {
-		perror("No device found!\n");
-	}
+    if ( r < 0 ) {
+      perror("Error opening library\n");
+    }
+    else if ( r == 0 ) {
+      perror("No device found!\n");
+    }
 
-	if ( r > 1 ) {
-		perror("More than 1 devices of interest found. Disconnect unwanted devices\n");
-	}
+    if ( r > 1 ) {
+      perror("More than 1 devices of interest found. Disconnect unwanted devices\n");
+    }
 
-	if(r > 0) {
-		h = cyusb_gethandle(0);
-		if ( cyusb_getvendor(h) != 0x04b4 ) {
-			perror("Cypress chipset not detected\n");
-			cyusb_close();
-		}
+    if(r > 0) {
+      h = cyusb_gethandle(0);
+      if ( cyusb_getvendor(h) != 0x04b4 ) {
+	perror("Cypress chipset not detected\n");
+	cyusb_close();
+      }
 
-		r = cyusb_kernel_driver_active(h, 0);
-		if ( r != 0 ) {
-		   perror("kernel driver active. Exitting\n");
-		   cyusb_close();
-		}
+      r = cyusb_kernel_driver_active(h, 0);
+      if ( r != 0 ) {
+	perror("kernel driver active. Exitting\n");
+	cyusb_close();
+      }
 
-		r = cyusb_claim_interface(h, 0);
-		if ( r != 0 ) {
-		   perror("Error in claiming interface\n");
-		   cyusb_close();
-		}
-		else printf("Successfully claimed interface\n");
-		cyusb_clear_halt(h, OUT_EP);
-	}
+      r = cyusb_claim_interface(h, 0);
+      if ( r != 0 ) {
+	perror("Error in claiming interface\n");
+	cyusb_close();
+      }
+      else printf("Successfully claimed interface\n");
+      cyusb_clear_halt(h, OUT_EP);
+    }
 	
-	gtk_init (&argc, &argv);
+    gtk_init (&argc, &argv);
 
-	main_window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-	gtk_window_set_title (GTK_WINDOW (main_window), "Read data from PLIS12cy - 4Det");
-	g_signal_connect (main_window, "destroy", G_CALLBACK (gtk_main_quit), NULL);
-	//gtk_window_set_resizable(GTK_WINDOW (main_window), TRUE);
+    main_window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title (GTK_WINDOW (main_window), "Read data from PLIS12cy - 4Det");
+    g_signal_connect (main_window, "destroy", G_CALLBACK (gtk_main_quit), NULL);
+    //gtk_window_set_resizable(GTK_WINDOW (main_window), TRUE);
 
-	main_statusbar = gtk_statusbar_new();
-	files.sb_context_id = gtk_statusbar_get_context_id(GTK_STATUSBAR (main_statusbar), "Statusbar info");
-	tempstr = g_strdup_printf("File name to save: %s", files.name_to_save);
+    main_statusbar = gtk_statusbar_new();
+    files.sb_context_id = gtk_statusbar_get_context_id(GTK_STATUSBAR (main_statusbar), "Statusbar info");
+    tempstr = g_strdup_printf("File name to save: %s", files.name_to_save);
     gtk_statusbar_push(GTK_STATUSBAR(main_statusbar), files.sb_context_id, tempstr);
     g_free(tempstr);
 
-	coord_statusbar = gtk_statusbar_new();
+    coord_statusbar = gtk_statusbar_new();
 
-	main_hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
-	gtk_container_add (GTK_CONTAINER (main_window), main_hbox);
+    main_hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_container_add (GTK_CONTAINER (main_window), main_hbox);
 
 
-	vbox_graph = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
-	gtk_box_pack_start(GTK_BOX(main_hbox), vbox_graph, TRUE, TRUE, 0);
+    vbox_graph = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
+    gtk_box_pack_start(GTK_BOX(main_hbox), vbox_graph, TRUE, TRUE, 0);
 	
-	graph_area1 = gtk_drawing_area_new ();
-	gtk_widget_add_events(graph_area1, GDK_POINTER_MOTION_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK);
-	gtk_widget_set_size_request (graph_area1, 500, 150);
-	g_signal_connect (graph_area1, "draw",
-                    G_CALLBACK (graph1_callback), (gpointer) data);
+    graph_area1 = gtk_drawing_area_new ();
+    gtk_widget_add_events(graph_area1, GDK_POINTER_MOTION_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK);
+    gtk_widget_set_size_request (graph_area1, 500, 150);
+    g_signal_connect (graph_area1, "draw",
+		      G_CALLBACK (graph1_callback), (gpointer) data);
     g_signal_connect(graph_area1, "button-press-event", 
-					G_CALLBACK(clicked_on_ga), NULL);
-	g_signal_connect (graph_area1, "motion-notify-event",
-					G_CALLBACK (motion_in_ga), GINT_TO_POINTER(0)); 
-	g_signal_connect (graph_area1, "button-release-event",
-					G_CALLBACK (unclicked_on_ga), NULL);
-	g_signal_connect (graph_area1, "configure-event",
-					G_CALLBACK (graph_configure_event), NULL); 
-	gtk_box_pack_start(GTK_BOX(vbox_graph), graph_area1, TRUE, TRUE, 1);
+		     G_CALLBACK(clicked_on_ga), NULL);
+    g_signal_connect (graph_area1, "motion-notify-event",
+		      G_CALLBACK (motion_in_ga), GINT_TO_POINTER(0)); 
+    g_signal_connect (graph_area1, "button-release-event",
+		      G_CALLBACK (unclicked_on_ga), NULL);
+    g_signal_connect (graph_area1, "configure-event",
+		      G_CALLBACK (graph_configure_event), NULL); 
+    gtk_box_pack_start(GTK_BOX(vbox_graph), graph_area1, TRUE, TRUE, 1);
 	
-	graph_area2 = gtk_drawing_area_new ();
-	gtk_widget_add_events(graph_area2, GDK_POINTER_MOTION_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK);
-	gtk_widget_set_size_request (graph_area2, 500, 150);
-	g_signal_connect (G_OBJECT (graph_area2), "draw",
-                    G_CALLBACK (graph2_callback), (gpointer) data);
-	g_signal_connect (graph_area2, "motion-notify-event",
-					G_CALLBACK (motion_in_ga), GINT_TO_POINTER(1)); 
-	gtk_box_pack_start(GTK_BOX(vbox_graph), graph_area2, TRUE, TRUE, 1);
+    graph_area2 = gtk_drawing_area_new ();
+    gtk_widget_add_events(graph_area2, GDK_POINTER_MOTION_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK);
+    gtk_widget_set_size_request (graph_area2, 500, 150);
+    g_signal_connect (G_OBJECT (graph_area2), "draw",
+		      G_CALLBACK (graph2_callback), (gpointer) data);
+    g_signal_connect (graph_area2, "motion-notify-event",
+		      G_CALLBACK (motion_in_ga), GINT_TO_POINTER(1)); 
+    gtk_box_pack_start(GTK_BOX(vbox_graph), graph_area2, TRUE, TRUE, 1);
 	
-	graph_area3 = gtk_drawing_area_new ();
-	gtk_widget_add_events(graph_area3, GDK_POINTER_MOTION_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK);
-	gtk_widget_set_size_request (graph_area3, 500, 150);
-	g_signal_connect (G_OBJECT (graph_area3), "draw",
-                    G_CALLBACK (graph3_callback), (gpointer) data);
-	gtk_box_pack_start(GTK_BOX(vbox_graph), graph_area3, TRUE, TRUE, 1);
+    graph_area3 = gtk_drawing_area_new ();
+    gtk_widget_add_events(graph_area3, GDK_POINTER_MOTION_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK);
+    gtk_widget_set_size_request (graph_area3, 500, 150);
+    g_signal_connect (G_OBJECT (graph_area3), "draw",
+		      G_CALLBACK (graph3_callback), (gpointer) data);
+    gtk_box_pack_start(GTK_BOX(vbox_graph), graph_area3, TRUE, TRUE, 1);
 	
-	graph_area4 = gtk_drawing_area_new ();
-	gtk_widget_add_events(graph_area4, GDK_POINTER_MOTION_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK);
-	gtk_widget_set_size_request (graph_area4, 500, 150);
-	g_signal_connect (G_OBJECT (graph_area4), "draw",
-                    G_CALLBACK (graph4_callback), (gpointer) data);
-	gtk_box_pack_start(GTK_BOX(vbox_graph), graph_area4, TRUE, TRUE, 1);
+    graph_area4 = gtk_drawing_area_new ();
+    gtk_widget_add_events(graph_area4, GDK_POINTER_MOTION_MASK | GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK);
+    gtk_widget_set_size_request (graph_area4, 500, 150);
+    g_signal_connect (G_OBJECT (graph_area4), "draw",
+		      G_CALLBACK (graph4_callback), (gpointer) data);
+    gtk_box_pack_start(GTK_BOX(vbox_graph), graph_area4, TRUE, TRUE, 1);
 	
-	gtk_box_pack_start(GTK_BOX(vbox_graph), main_statusbar, FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(vbox_graph), coord_statusbar, FALSE, FALSE, 0);
-	
-	
-	button_vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
-	gtk_box_pack_start(GTK_BOX(main_hbox), button_vbox, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox_graph), main_statusbar, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(vbox_graph), coord_statusbar, FALSE, FALSE, 0);
 	
 	
-	button_read = gtk_button_new_with_label("Read data");
-	g_signal_connect (G_OBJECT (button_read), "clicked",
-			G_CALLBACK (button_read_cb), (gpointer) data);
+    button_vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
+    gtk_box_pack_start(GTK_BOX(main_hbox), button_vbox, FALSE, FALSE, 0);
 	
-	button_write = gtk_button_new_with_label("Write data");
-	g_signal_connect (G_OBJECT (button_write), "clicked",
-			G_CALLBACK (button_write_cb), (gpointer) NULL);
 	
-	for(i=0; i<4; i++) {
-		tempstr = g_strdup_printf("Set threshold #%d", i+1);
-		button_set_range[i] = gtk_button_new_with_label(tempstr);
-		g_signal_connect (G_OBJECT (button_set_range[i]), "clicked",
+    button_read = gtk_button_new_with_label("Read data");
+    g_signal_connect (G_OBJECT (button_read), "clicked",
+		      G_CALLBACK (button_read_cb), (gpointer) data);
+	
+    button_write = gtk_button_new_with_label("Write data");
+    g_signal_connect (G_OBJECT (button_write), "clicked",
+		      G_CALLBACK (button_write_cb), (gpointer) NULL);
+	
+    for(i=0; i<4; i++) {
+      tempstr = g_strdup_printf("Set threshold #%d", i+1);
+      button_set_range[i] = gtk_button_new_with_label(tempstr);
+      g_signal_connect (G_OBJECT (button_set_range[i]), "clicked",
 			G_CALLBACK (button_range_cb), (gpointer) NULL);
-		g_free(tempstr);
+      g_free(tempstr);
 		
-		entry_range[i] = gtk_entry_new();
-		tempstr = g_strdup_printf("%d", rangeset[i]);
-		gtk_entry_set_text(GTK_ENTRY(entry_range[i]), tempstr);
-		g_free(tempstr);
-	}
+      entry_range[i] = gtk_entry_new();
+      tempstr = g_strdup_printf("%d", rangeset[i]);
+      gtk_entry_set_text(GTK_ENTRY(entry_range[i]), tempstr);
+      g_free(tempstr);
+    }
 	
-	button_reset = gtk_button_new_with_label("Reset");
-	g_signal_connect (G_OBJECT (button_reset), "clicked",
-			G_CALLBACK (button_reset_cb), (gpointer) NULL);
+    button_reset = gtk_button_new_with_label("Reset");
+    g_signal_connect (G_OBJECT (button_reset), "clicked",
+		      G_CALLBACK (button_reset_cb), (gpointer) NULL);
 	
-	button_test = gtk_button_new_with_label("Тест");
-	g_signal_connect (G_OBJECT (button_test), "clicked",
-			G_CALLBACK (button_test_cb), (gpointer) NULL);
+    button_test = gtk_button_new_with_label("Тест");
+    g_signal_connect (G_OBJECT (button_test), "clicked",
+		      G_CALLBACK (button_test_cb), (gpointer) NULL);
 	
-	button_delay = gtk_button_new_with_label("Set delay");
-	g_signal_connect (G_OBJECT (button_delay), "clicked",
-			G_CALLBACK (button_delay_cb), (gpointer) NULL);
+    button_delay = gtk_button_new_with_label("Set delay");
+    g_signal_connect (G_OBJECT (button_delay), "clicked",
+		      G_CALLBACK (button_delay_cb), (gpointer) NULL);
     entry_delay = gtk_entry_new();
     tempstr = g_strdup_printf("%d", delay);
     gtk_entry_set_text(GTK_ENTRY(entry_delay), tempstr);
     g_free(tempstr);
-//    send_command("w", delay);
-//    send_command("r", 0);
+    //    send_command("w", delay);
+    //    send_command("r", 0);
 	
-	button_save_to = gtk_button_new_with_label("Save to file");
-/*	g_signal_connect (G_OBJECT(button_save_to), "clicked",
-			G_CALLBACK(button_save_to_cb), (gpointer) data);*/
+    button_save_to = gtk_button_new_with_label("Save to file");
+    /*	g_signal_connect (G_OBJECT(button_save_to), "clicked",
+	G_CALLBACK(button_save_to_cb), (gpointer) data);*/
 
-	button_read_once = gtk_button_new_with_label("Read once");
-	g_signal_connect (G_OBJECT(button_read_once), "clicked",
-			G_CALLBACK(button_read_once_cb), (gpointer) data);
+    button_read_once = gtk_button_new_with_label("Read once");
+    g_signal_connect (G_OBJECT(button_read_once), "clicked",
+		      G_CALLBACK(button_read_once_cb), (gpointer) data);
 			
-	button_coinc_on = gtk_button_new_with_label("Coinc on");
-	g_signal_connect (G_OBJECT(button_coinc_on), "clicked",
-			G_CALLBACK(button_coinc_on_cb), (gpointer) data);
+    button_coinc_on = gtk_button_new_with_label("Coinc on");
+    g_signal_connect (G_OBJECT(button_coinc_on), "clicked",
+		      G_CALLBACK(button_coinc_on_cb), (gpointer) data);
 	
-	button_coinc_off = gtk_button_new_with_label("Coinc off");
-	g_signal_connect (G_OBJECT(button_coinc_off), "clicked",
-			G_CALLBACK(button_coinc_off_cb), (gpointer) data);
+    button_coinc_off = gtk_button_new_with_label("Coinc off");
+    g_signal_connect (G_OBJECT(button_coinc_off), "clicked",
+		      G_CALLBACK(button_coinc_off_cb), (gpointer) data);
 	
-	label_intens = gtk_label_new("");
+    label_intens = gtk_label_new("");
     tempstr = g_strdup_printf("%d cts/s | 0 s", intens);
-	gtk_label_set_text(GTK_LABEL(label_intens), tempstr);
+    gtk_label_set_text(GTK_LABEL(label_intens), tempstr);
     g_free(tempstr);
 	
-	adjust_scale = gtk_adjustment_new(SIZEOF_DATA(FILETYPE)/2 + 1.0, 25.0, SIZEOF_DATA(FILETYPE)/2+1.0, 1, 1.0, 1.0);
-	scale_zoom = gtk_scale_new(GTK_ORIENTATION_HORIZONTAL, adjust_scale);
-	gtk_scale_set_value_pos (GTK_SCALE (scale_zoom), GTK_POS_LEFT);
-	gtk_scale_set_digits (GTK_SCALE (scale_zoom), 0);
-	g_signal_connect (G_OBJECT(adjust_scale), "value-changed",
-				G_CALLBACK (scale_zoom_changed), NULL);
+    adjust_scale = gtk_adjustment_new(SIZEOF_DATA(FILETYPE)/2 + 1.0, 25.0, SIZEOF_DATA(FILETYPE)/2+1.0, 1, 1.0, 1.0);
+    scale_zoom = gtk_scale_new(GTK_ORIENTATION_HORIZONTAL, adjust_scale);
+    gtk_scale_set_value_pos (GTK_SCALE (scale_zoom), GTK_POS_LEFT);
+    gtk_scale_set_digits (GTK_SCALE (scale_zoom), 0);
+    g_signal_connect (G_OBJECT(adjust_scale), "value-changed",
+		      G_CALLBACK (scale_zoom_changed), NULL);
 	
-	button_leftzoom = gtk_button_new_with_label("<");
-	g_signal_connect (G_OBJECT(button_leftzoom), "clicked",
-			G_CALLBACK(left_zoom_cb), NULL);
+    button_leftzoom = gtk_button_new_with_label("<");
+    g_signal_connect (G_OBJECT(button_leftzoom), "clicked",
+		      G_CALLBACK(left_zoom_cb), NULL);
 			
-	button_rghtzoom = gtk_button_new_with_label(">");
-	g_signal_connect (G_OBJECT(button_rghtzoom), "clicked",
-			G_CALLBACK(right_zoom_cb), NULL);
+    button_rghtzoom = gtk_button_new_with_label(">");
+    g_signal_connect (G_OBJECT(button_rghtzoom), "clicked",
+		      G_CALLBACK(right_zoom_cb), NULL);
 			
-	button_yzoom = gtk_button_new_with_label("+Y");
-	g_signal_connect (G_OBJECT(button_yzoom), "clicked",
-			G_CALLBACK(yzoom_cb), NULL);
+    button_yzoom = gtk_button_new_with_label("+Y");
+    g_signal_connect (G_OBJECT(button_yzoom), "clicked",
+		      G_CALLBACK(yzoom_cb), NULL);
 						
-	button_unzoom = gtk_button_new_with_label("0");
-	g_signal_connect (G_OBJECT(button_unzoom), "clicked",
-			G_CALLBACK(unzoom_cb), adjust_scale);
+    button_unzoom = gtk_button_new_with_label("0");
+    g_signal_connect (G_OBJECT(button_unzoom), "clicked",
+		      G_CALLBACK(unzoom_cb), adjust_scale);
             
     button_yup = gtk_button_new_with_label("UP");
-	g_signal_connect (G_OBJECT(button_yup), "clicked",
-			G_CALLBACK(yup_cb), NULL);
+    g_signal_connect (G_OBJECT(button_yup), "clicked",
+		      G_CALLBACK(yup_cb), NULL);
     
     button_ydown = gtk_button_new_with_label("DOWN");
-	g_signal_connect (G_OBJECT(button_ydown), "clicked",
-			G_CALLBACK(ydown_cb), NULL);
+    g_signal_connect (G_OBJECT(button_ydown), "clicked",
+		      G_CALLBACK(ydown_cb), NULL);
 	
-	hr1 = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+    hr1 = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
 			
 	
-	table_button = gtk_grid_new();
-	gtk_grid_set_column_homogeneous(GTK_GRID(table_button), TRUE);
-	gtk_grid_attach(GTK_GRID(table_button), button_read, 0, 0, 1, 1);
-	gtk_grid_attach(GTK_GRID(table_button), button_write, 1, 0, 1, 1);
+    table_button = gtk_grid_new();
+    gtk_grid_set_column_homogeneous(GTK_GRID(table_button), TRUE);
+    gtk_grid_attach(GTK_GRID(table_button), button_read, 0, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(table_button), button_write, 1, 0, 1, 1);
 	
-	for(i=0; i<4; i++) {
-		gtk_grid_attach(GTK_GRID(table_button), button_set_range[i], 1, i+1, 1, 1);
-		gtk_grid_attach(GTK_GRID(table_button), entry_range[i], 0, i+1, 1, 1);
-	}
+    for(i=0; i<4; i++) {
+      gtk_grid_attach(GTK_GRID(table_button), button_set_range[i], 1, i+1, 1, 1);
+      gtk_grid_attach(GTK_GRID(table_button), entry_range[i], 0, i+1, 1, 1);
+    }
     
     gtk_grid_attach(GTK_GRID(table_button), entry_delay, 0, 5, 1, 1);
     gtk_grid_attach(GTK_GRID(table_button), button_delay, 1, 5, 1, 1);
 	
     gtk_grid_attach(GTK_GRID(table_button), button_reset, 0, 6, 1, 1);
     
-	gtk_grid_attach(GTK_GRID(table_button), button_coinc_on, 1, 6, 1, 1);
-	gtk_grid_attach(GTK_GRID(table_button), button_coinc_off, 1, 7, 1, 1);
+    gtk_grid_attach(GTK_GRID(table_button), button_coinc_on, 1, 6, 1, 1);
+    gtk_grid_attach(GTK_GRID(table_button), button_coinc_off, 1, 7, 1, 1);
 	
-	gtk_grid_attach(GTK_GRID(table_button), label_intens, 0, 7, 1, 1);
-	gtk_grid_attach(GTK_GRID(table_button), button_save_to, 0, 8, 1, 1);
-	gtk_grid_attach(GTK_GRID(table_button), button_read_once, 1, 8, 1, 1);
-	gtk_grid_attach(GTK_GRID(table_button), scale_zoom, 0, 9, 2, 1);
+    gtk_grid_attach(GTK_GRID(table_button), label_intens, 0, 7, 1, 1);
+    gtk_grid_attach(GTK_GRID(table_button), button_save_to, 0, 8, 1, 1);
+    gtk_grid_attach(GTK_GRID(table_button), button_read_once, 1, 8, 1, 1);
+    gtk_grid_attach(GTK_GRID(table_button), scale_zoom, 0, 9, 2, 1);
 	
     table_button_zoom = gtk_grid_new();
     gtk_grid_set_column_homogeneous(GTK_GRID(table_button_zoom), TRUE);
@@ -1904,59 +1924,54 @@ int main(int argc, char *argv[])
     gtk_grid_attach(GTK_GRID(table_button_zoom), button_unzoom, 2, 10, 1, 1);
     gtk_grid_attach(GTK_GRID(table_button_zoom), button_leftzoom, 0, 11, 1, 1);
     gtk_grid_attach(GTK_GRID(table_button_zoom), button_ydown, 1, 11, 1, 1);
-	gtk_grid_attach(GTK_GRID(table_button_zoom), button_rghtzoom, 2, 11, 1, 1);
+    gtk_grid_attach(GTK_GRID(table_button_zoom), button_rghtzoom, 2, 11, 1, 1);
     
 	
-	gtk_box_pack_start(GTK_BOX(button_vbox), table_button, FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(button_vbox), hr1, FALSE, FALSE, 2);
+    gtk_box_pack_start(GTK_BOX(button_vbox), table_button, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(button_vbox), hr1, FALSE, FALSE, 2);
 	
 	
-	view = gtk_text_view_new ();
-	buffer_calc = gtk_text_view_get_buffer (GTK_TEXT_VIEW (view));
-	gtk_text_buffer_set_text (buffer_calc, "Calc results:\n\nE = \nT = \nᐃT = \n", -1);
-	gtk_text_buffer_create_tag (buffer_calc, "blue_foreground",
-                              "foreground", "blue", NULL);
+    view = gtk_text_view_new ();
+    buffer_calc = gtk_text_view_get_buffer (GTK_TEXT_VIEW (view));
+    gtk_text_buffer_set_text (buffer_calc, "Calc results:\n\nE = \nT = \nᐃT = \n", -1);
+    gtk_text_buffer_create_tag (buffer_calc, "blue_foreground",
+				"foreground", "blue", NULL);
     gtk_text_buffer_create_tag (buffer_calc, "red_foreground",
-                              "foreground", "red", NULL);
+				"foreground", "red", NULL);
     gtk_text_buffer_create_tag (buffer_calc, "green_foreground",
-                              "foreground", "green", NULL);
+				"foreground", "green", NULL);
 	
-	button_readfile = gtk_button_new_with_label("Read file");
-	g_signal_connect (G_OBJECT(button_readfile), "clicked",
-			G_CALLBACK(button_readfile_cb), (gpointer) buffer_calc);
+    button_readfile = gtk_button_new_with_label("Read file");
+    g_signal_connect (G_OBJECT(button_readfile), "clicked",
+		      G_CALLBACK(button_readfile_cb), (gpointer) buffer_calc);
 	
-	button_readfile_next = gtk_button_new();
-	image_readfile_next = gtk_image_new_from_file("./go-next-rtl.png");
-	gtk_button_set_image(GTK_BUTTON(button_readfile_next), image_readfile_next);
-	g_signal_connect (G_OBJECT(button_readfile_next), "clicked",
-			G_CALLBACK(button_readfile_next_cb), (gpointer) buffer_calc);
+    button_readfile_next = gtk_button_new();
+    image_readfile_next = gtk_image_new_from_file("./go-next-rtl.png");
+    gtk_button_set_image(GTK_BUTTON(button_readfile_next), image_readfile_next);
+    g_signal_connect (G_OBJECT(button_readfile_next), "clicked",
+		      G_CALLBACK(button_readfile_next_cb), (gpointer) buffer_calc);
 			
-	button_readfile_prev = gtk_button_new();
-	image_readfile_prev = gtk_image_new_from_file("./go-previous-ltr.png");
-	gtk_button_set_image(GTK_BUTTON(button_readfile_prev), image_readfile_prev);
-	g_signal_connect (G_OBJECT(button_readfile_prev), "clicked",
-			G_CALLBACK(button_readfile_prev_cb), (gpointer) buffer_calc);
+    button_readfile_prev = gtk_button_new();
+    image_readfile_prev = gtk_image_new_from_file("./go-previous-ltr.png");
+    gtk_button_set_image(GTK_BUTTON(button_readfile_prev), image_readfile_prev);
+    g_signal_connect (G_OBJECT(button_readfile_prev), "clicked",
+		      G_CALLBACK(button_readfile_prev_cb), (gpointer) buffer_calc);
 	
 	
-	table_readfile = gtk_grid_new();
-	gtk_grid_attach(GTK_GRID(table_readfile), button_readfile, 0, 0, 1, 1);
-	gtk_grid_attach(GTK_GRID(table_readfile), button_readfile_next, 2, 0, 1, 1);
-	gtk_grid_attach(GTK_GRID(table_readfile), button_readfile_prev, 1, 0, 1, 1);
-	gtk_grid_attach(GTK_GRID(table_readfile), view, 0, 1, 4, 2);
+    table_readfile = gtk_grid_new();
+    gtk_grid_attach(GTK_GRID(table_readfile), button_readfile, 0, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(table_readfile), button_readfile_next, 2, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(table_readfile), button_readfile_prev, 1, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(table_readfile), view, 0, 1, 4, 2);
 
-	gtk_box_pack_start(GTK_BOX(button_vbox), table_readfile, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(button_vbox), table_readfile, FALSE, FALSE, 0);
 
 	
-	gtk_widget_show_all (main_window);
+    gtk_widget_show_all (main_window);
 
-	gtk_main ();
+    gtk_main ();
 
-	return 0;
+    return 0;
 }
-
-
-
-
-
 
 // 1 и 2ой разы считывать
