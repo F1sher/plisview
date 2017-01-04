@@ -7,6 +7,7 @@
 #include <time.h>
 #include <string.h>
 #include <pthread.h>
+#include <ctype.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -22,6 +23,8 @@
 
 
 #define FREE_DATA(to) do { for (j = 0; j < to; j++) { free(data[j]); data[j] = NULL; } } while(0);
+#define FREE_FILENAME_TO_SAVE_STR() do { free(files.name_to_save); files.name_to_save = NULL; } while(0);
+	      
 
 #define TIMES_TO_WRITE_SPK  (100000) //(3000)
 
@@ -1606,6 +1609,24 @@ static void ydown_cb(GtkWidget *widget, gpointer   user_data)
 }
 
 
+int check_positive_int(char *str)
+{
+    int i = 0;
+    unsigned int len = strlen(str);
+
+    if (str[0] == '-') {
+	return -1;
+    }
+
+    for (i = 0; i <= len - 1; i++) {
+	if (!isdigit(str[i])) {
+	    return -1;
+	}
+    }
+
+    return atoi(str);   
+}
+
 int main(int argc, char *argv[])
 {
     printf("%d, FT = %d\n", SIZEOF_DATA(FILETYPE), FILETYPE);
@@ -1617,6 +1638,7 @@ int main(int argc, char *argv[])
 
     int i = 0, j = 0;
     int r = 0;
+    int x = -1;
     int opt;
 	
     for (i = 0; i < 4; i++) {
@@ -1651,29 +1673,55 @@ int main(int argc, char *argv[])
 	  if (strlen(optarg) >= 128) {
 	      fprintf(stderr, "Filename should be shroter\n");
 	      FREE_DATA(4);
-	      free(files.name_to_save);
-	      files.name_to_save = NULL;
 	      exit(-1);
 	  }
+
+	  mkdir("./spks", 0777);
 	  files.name_to_save = g_strdup_printf("./spks/%s", optarg);
                 
 	  break;
       case 't':
-	  acq_time = atoi(optarg);
-            
+	  acq_time = check_positive_int(optarg);
+	  if (acq_time < 0) {
+	      fprintf(stderr, "-t flag error: acquistion time should be non-negative\n");
+	      FREE_DATA(4);
+	      FREE_FILENAME_TO_SAVE_STR();
+	      exit(-1);
+	  }
+
 	  break;
       case 'r':
+	  x = check_positive_int(optarg);
+	  if (x < 0) {
+	      fprintf(stderr, "-r flag error: range should be non-negative\n");
+	      FREE_DATA(4);
+	      FREE_FILENAME_TO_SAVE_STR();
+	      exit(-1);
+	  }
+
 	  for (i = 0; i < 4; i++) {
-	      rangeset[i] = atoi(optarg);
+	      rangeset[i] = x;
 	  }
                 
 	  break;
       case 'd':
-	  delay = atoi(optarg);
-            
+	  delay = check_positive_int(optarg);
+	  if (delay < 0) {
+	      fprintf(stderr, "-d flag error: delay should be non-negative\n");
+	      FREE_DATA(4);
+	      FREE_FILENAME_TO_SAVE_STR();
+	      exit(-1);
+	  }
+  
 	  break;
       case 'g':
 	  goodness_lim = atoi(optarg);
+	  if ((goodness_lim != 0) || (goodness_lim != 2) || (goodness_lim != 3)) {
+	      fprintf(stderr, "-g flag error: -g GOODNESS_LIM (=0 write all signals, =2 write if 2 pairs of coinc, =3 do not write signals\n");
+	      FREE_DATA(4);
+	      FREE_FILENAME_TO_SAVE_STR();
+	      exit(-1);
+	  }
             
 	  break;
       default:
