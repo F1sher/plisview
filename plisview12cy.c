@@ -72,16 +72,6 @@ static struct {
     char *name_to_save;
 } files;
 
-int lengthof(char *str)
-{
-    int i=0;
-	
-	while (*(str++) != '\0')
-		i++;
-		
-	return ++i;	
-}
-
 int f_meander()
 {
 	static int i = 0;
@@ -178,60 +168,61 @@ void unclicked_on_ga(GtkWidget *widget, GdkEventButton *event, gpointer   data)
 
 static void motion_in_ga(GtkWidget *widget, GdkEventMotion *event, gpointer   user_data)
 {	
-	//printf("Motion on GA! (%.2f, %.2f) STATE = %d\n", event->x, event->y, (event->state & GDK_BUTTON2_MASK));
-	GtkAllocation allocation;
-    gchar *tempstr;
+    //printf("Motion on GA! (%.2f, %.2f) STATE = %d\n", event->x, event->y, (event->state & GDK_BUTTON2_MASK));
+    GtkAllocation allocation;
+    gchar *tempstr = NULL;
+    
+    gtk_widget_get_allocation (widget, &allocation);
+    
+    int min_i = (SIZEOF_DATA(FILETYPE)/2-scale_opt.x_range)/2 - scale_opt.x;
+    int max_i = SIZEOF_DATA(FILETYPE)/2-1-(SIZEOF_DATA(FILETYPE)/2-scale_opt.x_range)/2 + scale_opt.x;
+    gfloat x_range = (gfloat) (max_i-min_i-2.0*scale_opt.x);
 	
-	gtk_widget_get_allocation (widget, &allocation);
+    int real_i = (int)round( (event->x-2.0*X_NULL)*x_range/(allocation.width-2.0*X_NULL)+min_i );
 	
-	int min_i = (SIZEOF_DATA(FILETYPE)/2-scale_opt.x_range)/2 - scale_opt.x;
-	int max_i = SIZEOF_DATA(FILETYPE)/2-1-(SIZEOF_DATA(FILETYPE)/2-scale_opt.x_range)/2 + scale_opt.x;
-	gfloat x_range = (gfloat) (max_i-min_i-2.0*scale_opt.x);
+    //printf("real i = %d, x = %.1f\n", real_i, event->x);
 	
-	int real_i = (int)round( (event->x-2.0*X_NULL)*x_range/(allocation.width-2.0*X_NULL)+min_i );
-	
-	//printf("real i = %d, x = %.1f\n", real_i, event->x);
-	
-	if (real_i >= 0) {
+    if (real_i >= 0) {
         tempstr = g_strdup_printf("(%d, %d)", real_i, data[GPOINTER_TO_INT(user_data)][real_i]);
-		gtk_statusbar_push(GTK_STATUSBAR(coord_statusbar), 0, tempstr);
+	gtk_statusbar_push(GTK_STATUSBAR(coord_statusbar), 0, tempstr);
         g_free(tempstr);
+	tempstr = NULL;
     }
 }
 
 static void touch_ga(GtkWidget *widget, gpointer   data)
 {
-	printf("Touch GA!\n");
+    printf("Touch GA!\n");
 }
 
 static gboolean graph_configure_event (GtkWidget         *widget,
                           GdkEventConfigure *event,
                           gpointer           data)
 {
-	printf("%s\n", __FUNCTION__);
+    printf("%s\n", __FUNCTION__);
 	
-	GtkAllocation allocation;
+    GtkAllocation allocation;
 
-  if (surface1)
-    cairo_surface_destroy (surface1);
-
-  gtk_widget_get_allocation (widget, &allocation);
-  surface1 = gdk_window_create_similar_surface (gtk_widget_get_window (widget),
-                                               CAIRO_CONTENT_COLOR,
-                                               allocation.width,
-                                               allocation.height/2);
+    if (surface1) {
+	cairo_surface_destroy (surface1);
+    }
+    gtk_widget_get_allocation (widget, &allocation);
+    surface1 = gdk_window_create_similar_surface (gtk_widget_get_window (widget),
+						  CAIRO_CONTENT_COLOR,
+						  allocation.width,
+						  allocation.height/2);
 }
 
 int control_test(unsigned char bmRequestType) 
 {
-	int r;
-	unsigned char datac[2];
+    int r;
+    unsigned char datac[2] = {15, 15};
 	
-	datac[0] = datac[1] = 15;
+    //datac[0] = datac[1] = 15;
 	
-	r = cyusb_control_transfer(h, bmRequestType, 0x00, 0x0000, 0x0000, datac, 2, 0); //wIndex = 0x0000 or LIBUSB_ENDPOINT_IN | IN_EP 0b0000 0000 1000 xxxx
+    r = cyusb_control_transfer(h, bmRequestType, 0x00, 0x0000, 0x0000, datac, 2, 0); //wIndex = 0x0000 or LIBUSB_ENDPOINT_IN | IN_EP 0b0000 0000 1000 xxxx
 	
-	return datac[0];
+    return datac[0];
 }
 
 
@@ -1097,10 +1088,10 @@ static void button_readfile_cb(GtkWidget *widget, gpointer user_data)
 		if (files.name_to_read != NULL)
 			free(files.name_to_read);
 		
-		files.name_to_read = (char *)malloc(lengthof(gtk_file_chooser_get_filename (chooser))*sizeof(char));
+		files.name_to_read = (char *)malloc(strlen(gtk_file_chooser_get_filename (chooser))*sizeof(char));
 		
 		files.name_to_read = gtk_file_chooser_get_filename (chooser);
-		printf("filename choosen = %s %d\n", files.name_to_read, lengthof(gtk_file_chooser_get_filename (chooser)));
+		printf("filename choosen = %s %lu\n", files.name_to_read, strlen(gtk_file_chooser_get_filename (chooser)));
 		
 		if ( strncmp(files.name_to_read, "6_1__", strlen("6_1__")) == 0 ) {
 			FILETYPE = 0;
