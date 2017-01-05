@@ -1085,38 +1085,38 @@ static void button_readfile_cb(GtkWidget *widget, gpointer user_data)
 	res = gtk_dialog_run (GTK_DIALOG (dialog));
 	if (res == GTK_RESPONSE_ACCEPT)
 	{
-		if (files.name_to_read != NULL)
-			free(files.name_to_read);
+	    if (files.name_to_read != NULL)
+		free(files.name_to_read);
+	    
+	    files.name_to_read = (char *)malloc(strlen(gtk_file_chooser_get_filename (chooser))*sizeof(char));
 		
-		files.name_to_read = (char *)malloc(strlen(gtk_file_chooser_get_filename (chooser))*sizeof(char));
+	    files.name_to_read = gtk_file_chooser_get_filename (chooser);
+	    printf("filename choosen = %s %lu\n", files.name_to_read, strlen(gtk_file_chooser_get_filename (chooser)));
 		
-		files.name_to_read = gtk_file_chooser_get_filename (chooser);
-		printf("filename choosen = %s %lu\n", files.name_to_read, strlen(gtk_file_chooser_get_filename (chooser)));
-		
-		if ( strncmp(files.name_to_read, "6_1__", strlen("6_1__")) == 0 ) {
-			FILETYPE = 0;
-		}
-		else {
-			FILETYPE = 1;
-		}
-		
+	    if ( strncmp(files.name_to_read, "6_1__", strlen("6_1__")) == 0 ) {
+		FILETYPE = 0;
+	    }
+	    else {
+		FILETYPE = 1;
+	    }
+	    
+	    if (FILETYPE) {
+		files.fd_read = open(files.name_to_read, O_RDONLY);
+	    }
+	    else {
+		files.fd_Fread = fopen(files.name_to_read, "r");
+	    }
+	    
+	    files.readpos = 0;
+	    printf("FT = %d\n", FILETYPE);
+	    if ( draw_data_from_file((GtkTextBuffer *)user_data) != 0 ) {
 		if (FILETYPE) {
-			files.fd_read = open(files.name_to_read, O_RDONLY);
+		    close(files.fd_read);
 		}
 		else {
-			files.fd_Fread = fopen(files.name_to_read, "r");
+		    fclose(files.fd_Fread);
 		}
-		
-		files.readpos = 0;
-		printf("FT = %d\n", FILETYPE);
-		if ( draw_data_from_file((GtkTextBuffer *)user_data) != 0 ) {
-			if (FILETYPE) {
-				close(files.fd_read);
-			}
-			else {
-				fclose(files.fd_Fread);
-			}
-		}
+	    }
 	}
 
 	gtk_widget_destroy (dialog);
@@ -1124,46 +1124,50 @@ static void button_readfile_cb(GtkWidget *widget, gpointer user_data)
 
 static void button_readfile_next_cb(GtkWidget *widget, gpointer   user_data)
 {
-	files.readpos+=2;
+    files.readpos += 2;
 
-	if ( draw_data_from_file((GtkTextBuffer *)user_data) != 0 )
-			close(files.fd_read);
+    if ( draw_data_from_file((GtkTextBuffer *)user_data) != 0 ) {
+	close(files.fd_read);
+    }
 }
 
 static void button_readfile_prev_cb(GtkWidget *widget, gpointer   user_data)
 {
-	files.readpos-=2;
-	if (files.readpos < 0)
-		files.readpos = 0;
+    files.readpos-=2;
+    if (files.readpos < 0) {
+	files.readpos = 0;
+    }
 
-	if ( draw_data_from_file((GtkTextBuffer *)user_data) != 0 )
-			close(files.fd_read);
+    if ( draw_data_from_file((GtkTextBuffer *)user_data) != 0 ) {
+	close(files.fd_read);
+    }
 }
 
 int find_pick_start_stop(int *a, int *max_num, int *min_num)
 {
-	int i, j;
+    int i, j;
     int baseline = (a[0] + a[1] + a[2] + a[3] + a[4]) / 5;
      
     for (i = 2, j = 1; i <= SIZEOF_DATA(FILETYPE)-1; i++) {
         if (a[i] <= 0.95*a[j]) {
-		//	printf("i = %d, a[i] = %d, a[j] = %d\n", i, a[i], a[j]);
-			if( (a[i+1] <= a[j]) && (a[i+2] <= a[j]) && (a[i] <= baseline) )
+	    //	printf("i = %d, a[i] = %d, a[j] = %d\n", i, a[i], a[j]);
+	    if( (a[i+1] <= a[j]) && (a[i+2] <= a[j]) && (a[i] <= baseline) ) {
                 j = i;
-                break;
+	    }
+	    break;
         }
     }
     if (j < 7) {
-		j = 7;
-	}
-	*max_num = j-7;
+	j = 7;
+    }
+    *max_num = j-7;
     
     for (i = j; i <= SIZEOF_DATA(FILETYPE)-4; i++) {
-		if ((a[i] >= a[j-7]) &&	(a[i+1]>=a[j-7]) && (a[i]>=baseline)) {
-			*min_num = i; 
-			return 0;
-		}
+	if ((a[i] >= a[j-7]) &&	(a[i+1]>=a[j-7]) && (a[i]>=baseline)) {
+	    *min_num = i; 
+	    return 0;
 	}
+    }
     
     //*min_num = 150;
     
@@ -1172,85 +1176,86 @@ int find_pick_start_stop(int *a, int *max_num, int *min_num)
 
 double trap_area(int *a, int max_num, int min_num, double *base)
 {
-	int i;
-	double area = 0.0;
-	double baseline = (a[0] + a[1] + a[2] + a[3] + a[4]) / 5.0;
-	if (base != NULL) {
-		*base = baseline;
-	}
-	
-	for (i = max_num; i <= min_num-1; i++)
-		area += 0.5*(a[i]+a[i+1]-2.0*baseline);
-		
-	return area;
+    int i;
+    double area = 0.0;
+    double baseline = (a[0] + a[1] + a[2] + a[3] + a[4]) / 5.0;
+    if (base != NULL) {
+	*base = baseline;
+    }
+    
+    for (i = max_num; i <= min_num-1; i++) {
+	area += 0.5*(a[i]+a[i+1]-2.0*baseline);
+    }
+
+    return area;
 }
 
 double trapez_shape_area(int *a, int max_num, int min_num)
 {	
-	const int k = 10;
-	const int l = 15;
-	const double tau = 2.4;
+    const int k = 10;
+    const int l = 15;
+    const double tau = 2.4;
 
-	double *s = (double *)malloc(sizeof(double)*min_num); //output signal
-	int *Tr = (int *)calloc(min_num, sizeof(int));		   //input signal after zero-pole correction and -baseline
-	double baseline = (a[0] + a[1] + a[2] + a[3] + a[4] + a[5] + a[6] + a[7] + a[8] + a[9])/10.0, min_s;
-	int i, i_min_s;
-	printf("Baseline = %.4f\n", baseline);
+    double *s = (double *)malloc(sizeof(double)*min_num); //output signal
+    int *Tr = (int *)calloc(min_num, sizeof(int));		   //input signal after zero-pole correction and -baseline
+    double baseline = (a[0] + a[1] + a[2] + a[3] + a[4] + a[5] + a[6] + a[7] + a[8] + a[9])/10.0, min_s;
+    int i, i_min_s;
+    printf("Baseline = %.4f\n", baseline);
+    
+    min_s = s[0] = 0.0;
+    i_min_s = max_num;
 	
-	min_s = s[0] = 0.0;
-	i_min_s = max_num;
-	
-	for(i=0; i<=SIZEOF_DATA(FILETYPE)-1; i++) {
+    for (i = 0; i <= SIZEOF_DATA(FILETYPE)-1; i++) {
 	//	a[i] = a[i]-baseline;
 	//	a[i] =  a[i]-2000;
 	//	a[i] = 2000 - a[i];
-	}
-	for(i=1; i<=min_num-1; i++) {
-		Tr[i] = Tr[i-1] + ( (a[i]-baseline) - (a[i-1]-baseline)*(1.0-1.0/tau) );
+    }
+    for (i = 1; i <= min_num-1; i++) {
+	Tr[i] = Tr[i-1] + ( (a[i]-baseline) - (a[i-1]-baseline)*(1.0-1.0/tau) );
 	//	printf("Tri = %d\t", Tr[i]);
-	}
+    }
 	
-	for(i=max_num+1; i<=min_num-1; i++) {
-		if (i-l-k>=0)
-			//s[i] = s[i-1] + a[i] - a[i-k] - a[i-l] + a[i-k-l];
-			s[i] = s[i-1] + Tr[i] - Tr[i-k] - Tr[i-l] + Tr[i-k-l];
-		else if (i-l>=0)
-			//s[i] = s[i-1] + a[i] - a[i-k] - a[i-l];
-			s[i] = s[i-1] + Tr[i] - Tr[i-k] - Tr[i-l];
-		else if (i-k>=0)
-			//s[i] = s[i-1] + a[i] - a[i-k];
-			s[i] = s[i-1] + Tr[i] - Tr[i-k];
-		else
-			//s[i] = s[i-1] + a[i];
-			s[i] = s[i-1] + Tr[i];
+    for (i = max_num+1; i <= min_num-1; i++) {
+	if (i-l-k>=0)
+	    //s[i] = s[i-1] + a[i] - a[i-k] - a[i-l] + a[i-k-l];
+	    s[i] = s[i-1] + Tr[i] - Tr[i-k] - Tr[i-l] + Tr[i-k-l];
+	else if (i-l>=0)
+	    //s[i] = s[i-1] + a[i] - a[i-k] - a[i-l];
+	    s[i] = s[i-1] + Tr[i] - Tr[i-k] - Tr[i-l];
+	else if (i-k>=0)
+	    //s[i] = s[i-1] + a[i] - a[i-k];
+	    s[i] = s[i-1] + Tr[i] - Tr[i-k];
+	else
+	    //s[i] = s[i-1] + a[i];
+	    s[i] = s[i-1] + Tr[i];
 	//	if(s[i] < min_s) { min_s = s[i]; i_min_s = i; }
 	//	printf("si=%.2f, si-1=%.2f, ai=%d, ai-k=%d, ai-k-l=%d\n", s[i], s[i-1], a[i], a[i-k], a[i-k-l]);
-	}
+    }
 	
-	FILE *in = fopen("trapez_shape", "w+");
-	for(i=max_num+1; i<=min_num-1; i++) {
-		fprintf(in, "%d %d %e\n", i, a[i], s[i]);
+    FILE *in = fopen("trapez_shape", "w+");
+    for (i = max_num+1; i <= min_num-1; i++) {
+	fprintf(in, "%d %d %e\n", i, a[i], s[i]);
 	//	a[i] = (int)s[i];
+    }
+    fclose(in);
+    
+    for (i = 1; i <= min_num-1; i++) {
+	if (a[i] <= 0.95*a[i-1]) {
+	    i_min_s = i + k + 1;
+	    break;
 	}
-	fclose(in);
-	
-	for(i=1; i<=min_num-1; i++) {
-		if(a[i] <= 0.95*a[i-1]) {
-			i_min_s = i + k + 1;
-			break;
-		}
-	}
-	printf("i_min_s = %d\n", i_min_s);
-	
-	double res = 0.0;
-	for(i = i_min_s; i <= i_min_s + l-k - 2; i++)
+    }
+    printf("i_min_s = %d\n", i_min_s);
+    
+    double res = 0.0;
+    for (i = i_min_s; i <= i_min_s + l-k - 2; i++)
 		res += s[i];
-	res = res/(l-k-1);
+    res = res/(l-k-1);
+    
+    free(s);
+    free(Tr);
 	
-	free(s);
-	free(Tr);
-	
-	return res;
+    return res;
 }
 
 // f(x) = ( A*(exp(-((x)-(x0))/a) - exp(-((x)-(x0))/b)) -B*exp(-((x)-(x0))/c) + F )
@@ -1261,111 +1266,111 @@ double trapez_shape_area(int *a, int max_num, int min_num)
 
 double search_min_f(double x0, double dx, double start_search)
 {
-	int i;
-	double z = f(start_search, x0), x0min;
+    int i;
+    double z = f(start_search, x0), x0min;
 	
-	printf("x0=%e, dx=%e, start=%e\n", x0, dx, start_search);
+    printf("x0=%e, dx=%e, start=%e\n", x0, dx, start_search);
 	
-	for(i=1; i<(int)(6.0/dx); i++) {
-		if(f(start_search+i*dx, x0) < z) {
-			z = f(start_search+i*dx, x0);
-			x0min = start_search + i*dx;
-		}
+    for (i = 1; i < (int)(6.0/dx); i++) {
+	if (f(start_search+i*dx, x0) < z) {
+	    z = f(start_search+i*dx, x0);
+	    x0min = start_search + i*dx;
 	}
+    }
 	
-	return x0min;
+    return x0min;
 }
 
 double find_start_pick(int *x, char flag)
 {
-//	#define f(x, x0) ( -0.000725124002756408*(exp(-((x)-(x0))/27461468.6) - exp(-((x)-(x0))/1.31784519694857)) -1855.99996745509*exp(-((x)-(x0))/34.3120374841288) + 3298.00001427814 )
-	#define STEP	0.001 
-	#define	EPSILON	0.000001
-	double x0INIT = 52.0;
+    //	#define f(x, x0) ( -0.000725124002756408*(exp(-((x)-(x0))/27461468.6) - exp(-((x)-(x0))/1.31784519694857)) -1855.99996745509*exp(-((x)-(x0))/34.3120374841288) + 3298.00001427814 )
+#define STEP	0.001 
+#define	EPSILON	0.000001
+    double x0INIT = 52.0;
 	
-	double S_optim, S_plus, S_minus, S_test;
-	double S_plus_prev, S_minus_prev;
-	double x0new = x0INIT;
-	int i, j;
-	int start_approx = 13;
-	int end_approx = 20;
+    double S_optim, S_plus, S_minus, S_test;
+    double S_plus_prev, S_minus_prev;
+    double x0new = x0INIT;
+    int i, j;
+    int start_approx = 13;
+    int end_approx = 20;
 	
-	int x_min_num = min_bubble_num(x, SIZEOF_DATA(FILETYPE));
+    int x_min_num = min_bubble_num(x, SIZEOF_DATA(FILETYPE));
+    
+    if(flag == 0) {
+	double baseline = (x[0] + x[1] + x[2] + x[3] + x[4]) / 5.0;
+	int max, min;
+	find_pick_start_stop(x, &max, &min);
 	
-	if(flag == 0) {
-		double baseline = (x[0] + x[1] + x[2] + x[3] + x[4]) / 5.0;
-		int max, min;
-		find_pick_start_stop(x, &max, &min);
-		
-		double normalization = NORMAL_SQUARE/trap_area(x, max, min, NULL);
-		printf("normalization = %.4f\n", normalization);
-		
-		for(i=0; i<=SIZEOF_DATA(FILETYPE)-1; i++) {
-			x[i] = (int)( baseline - normalization*(baseline-(double)x[i]) );
-		} 
+	double normalization = NORMAL_SQUARE/trap_area(x, max, min, NULL);
+	printf("normalization = %.4f\n", normalization);
+	
+	for(i=0; i<=SIZEOF_DATA(FILETYPE)-1; i++) {
+	    x[i] = (int)( baseline - normalization*(baseline-(double)x[i]) );
+	} 
+    }
+	
+    for(i=0; i<x_min_num; i++) {
+	if((x[i] <= 0.97*x[i-1]) && (x[i] <= 0.97*x[i-1])) {
+	    start_approx = i;
+	    break;
 	}
-	
-	for(i=0; i<x_min_num; i++) {
-		if((x[i] <= 0.97*x[i-1]) && (x[i] <= 0.97*x[i-1])) {
-			start_approx = i;
-			break;
-		}
-	}
+    }
  
-	end_approx = start_approx + 7;
-	printf("start = %d; end = %d approx\n", start_approx, end_approx);
-	/*
-	for(i = x_min_num; i<SIZEOF_DATA(FILETYPE)-1; i++) {
-		if( (x[i] >= 0.7*x[x_min_num]) && (x[i+1] >= 0.7*x[x_min_num-4]) ) {
-			x0INIT = (double)(i);
-			break;
-		}
-	}
+    end_approx = start_approx + 7;
+    printf("start = %d; end = %d approx\n", start_approx, end_approx);
+    /*
+      for(i = x_min_num; i<SIZEOF_DATA(FILETYPE)-1; i++) {
+      if( (x[i] >= 0.7*x[x_min_num]) && (x[i+1] >= 0.7*x[x_min_num-4]) ) {
+      x0INIT = (double)(i);
+      break;
+      }
+      }
 	printf("x_min_num = %d, x0INIT = %.4f\n", x_min_num, x0INIT);
-	*/
-	S_optim = 0.0;
-	S_test = 0.0;
+    */
+    S_optim = 0.0;
+    S_test = 0.0;
+    
+    for(i=start_approx; i<=end_approx-1; i++) {
+	S_optim += fabs(x[i] - f((double)i, x0INIT));
+	S_test += fabs(x[i] - f((double)i, 53.7495));
+    }
+    
+    S_plus = S_minus = 0.0;
+    for(j=1; j <= (int)(3.0/STEP); j++) {
+	S_plus_prev = S_plus;
+	S_minus_prev = S_minus;
+	S_plus = S_minus = 0.0;
 	
 	for(i=start_approx; i<=end_approx-1; i++) {
-		S_optim += fabs(x[i] - f((double)i, x0INIT));
-		S_test += fabs(x[i] - f((double)i, 53.7495));
-	}
-	
-	S_plus = S_minus = 0.0;
-	for(j=1; j <= (int)(3.0/STEP); j++) {
-		S_plus_prev = S_plus;
-		S_minus_prev = S_minus;
-		S_plus = S_minus = 0.0;
-		
-		for(i=start_approx; i<=end_approx-1; i++) {
 			S_plus += fabs(x[i] - f((double)i, x0INIT + j*STEP));
 			S_minus += fabs(x[i] - f((double)i, x0INIT - j*STEP));
-		}
-		
-		if(S_plus <= S_minus) {
-			if(S_plus < S_optim) {
-				S_optim = S_plus;
-				x0new = x0INIT + STEP*j;
-				if(fabs(S_plus - S_plus_prev) <= EPSILON) {
-					break;
-				}
-			}
-		}
-		else {
-			if(S_minus < S_optim) {
-		//		printf("j=%d Soptim = %.2f, S+ = %.2f, S- = %.2f, S_test = %.2f; x0new = %.2f\n", j, S_optim, S_plus, S_minus, S_test, x0new);
-				S_optim = S_minus;
-				x0new = x0INIT - STEP*j;
-				if(fabs(S_minus - S_minus_prev) <= EPSILON) {
-					break;
-				}
-			}
-		}
 	}
 	
-	printf("j=%d Soptim = %.2f, S+ = %.2f, S- = %.2f, S_test = %.2f; x0new = %.2f\n", j, S_optim, S_plus, S_minus, S_test, x0new);
+	if(S_plus <= S_minus) {
+	    if(S_plus < S_optim) {
+		S_optim = S_plus;
+		x0new = x0INIT + STEP*j;
+				if(fabs(S_plus - S_plus_prev) <= EPSILON) {
+				    break;
+				}
+	    }
+		}
+	else {
+	    if(S_minus < S_optim) {
+		//		printf("j=%d Soptim = %.2f, S+ = %.2f, S- = %.2f, S_test = %.2f; x0new = %.2f\n", j, S_optim, S_plus, S_minus, S_test, x0new);
+		S_optim = S_minus;
+		x0new = x0INIT - STEP*j;
+		if(fabs(S_minus - S_minus_prev) <= EPSILON) {
+		    break;
+		}
+	    }
+	}
+    }
 	
-	return x0new;
+    printf("j=%d Soptim = %.2f, S+ = %.2f, S- = %.2f, S_test = %.2f; x0new = %.2f\n", j, S_optim, S_plus, S_minus, S_test, x0new);
+    
+    return x0new;
 //	return search_min_f(x0new, STEP/10.0, start_approx);
 }
 
