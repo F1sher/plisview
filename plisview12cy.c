@@ -2030,6 +2030,10 @@ int main(int argc, char *argv[])
 
     gtk_main ();
 
+    FREE_DATA(4);
+    FREE_FILENAME_TO_SAVE_STR();
+    cyusb_close();
+
     return 0;
 }
 
