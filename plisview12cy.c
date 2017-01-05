@@ -558,10 +558,12 @@ void *read_from_ep(void *user_data)
     for (i = 0; i < 12; i++) {
         start[i] = (int*)calloc(HIST_SIZE, sizeof(int));
     }
-    int s1, s2;
-    int n1, n2;
-    double start_a, start_b, diff_time, c = 2.0*T_SCALE[0]*T_SCALE[1]/HIST_SIZE;
-    int dtime, goodness;
+
+    int s1 = 0, s2 = 0;
+    int n1 = 0, n2 = 0;
+    double start_a = -1.0, start_b = -1.0, diff_time = -1.0;
+    double c = 2.0*T_SCALE[0]*T_SCALE[1]/HIST_SIZE;
+    int dtime = 0, goodness = 0;
     
     static const int CONTROL_REQUEST_TYPE_IN = LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_STANDARD | LIBUSB_RECIPIENT_DEVICE;
     
@@ -569,7 +571,7 @@ void *read_from_ep(void *user_data)
     
     //FIFOs pre-settings. Look at the end of this function
     int fp[16][4];
-    gchar *tempstr;
+    gchar *tempstr = NULL;
     
     for (i = 0; i < 16; i++) {
         for (j = 0; j < 4; j++) {
@@ -586,26 +588,31 @@ void *read_from_ep(void *user_data)
             }
         }
         g_free(tempstr);
+	tempstr = NULL;
     }
     
-	if (!access(files.name_to_save, F_OK)) {
-		remove(files.name_to_save);
-		printf("File was removed\n");
-	}
+    if (!access(files.name_to_save, F_OK)) {
+	remove(files.name_to_save);
+	//	printf("File was removed\n");
+    }
     
-	if (!inFile) inFile = open (files.name_to_save, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (!inFile) inFile = open (files.name_to_save, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 	
-	printf("TRUE %d; inFile = %d\n", ok_read, inFile);
-	int out;
-	while(TRUE) {
-		if ((out = control_test(CONTROL_REQUEST_TYPE_IN)) != 1) { times_asked++; continue; }
-		if (ok_read == 1) {
+    //printf("TRUE %d; inFile = %d\n", ok_read, inFile);
+    int out = -1;
+    while (TRUE) {
+	out = control_test(CONTROL_REQUEST_TYPE_IN); 
+	if (out != 1) {
+	    times_asked++; 
+	    continue;
+	}
+	if (ok_read == 1) {
             times_started++;
 			
-			//memset(buf, 0, 4*SIZEOF_DATA(FILETYPE)*sizeof(unsigned char));
+	    //memset(buf, 0, 4*SIZEOF_DATA(FILETYPE)*sizeof(unsigned char));
             
-			r = cyusb_bulk_transfer(h, IN_EP, buf, 4*SIZEOF_DATA(FILETYPE), &transferred, 0);
-			if (r != 0) {
+	    r = cyusb_bulk_transfer(h, IN_EP, buf, 4*SIZEOF_DATA(FILETYPE), &transferred, 0);
+	    if (r != 0) {
 				if(transferred != 4*SIZEOF_DATA(FILETYPE))
 					printf("Error in bulk transfer %d, transferred = %d \n", r, transferred);
 				cyusb_error(r);
