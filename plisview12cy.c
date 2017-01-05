@@ -798,14 +798,19 @@ void *read_from_ep(void *user_data)
 
 static void button_read_cb(GtkWidget *widget, gpointer   user_data)
 {
-	ok_read = 1;
-	int err = pthread_create(&tid1, NULL, read_from_ep, NULL);
-    if (err != 0)
-		printf("\ncan't create clock thread :[%s]", strerror(err));
-	
-	err = pthread_create(&tid2, NULL, draw, NULL);
-    if (err != 0)
-		printf("\ncan't create clock thread :[%s]", strerror(err));
+    int err = -1; 
+    
+    err = pthread_create(&tid1, NULL, read_from_ep, NULL);
+    if (err != 0) {
+	fprintf(stderr, "\ncan't create clock thread :[%s]", strerror(err));
+	return ;
+    }
+
+    err = pthread_create(&tid2, NULL, draw, NULL);
+    if (err != 0) {
+	fprintf(stderr, "\ncan't create clock thread :[%s]", strerror(err));
+	return ;
+    }
 }
 
 
@@ -1958,8 +1963,8 @@ int main(int argc, char *argv[])
     gtk_grid_attach(GTK_GRID(table_button), button_write, 1, 0, 1, 1);
 	
     for (i = 0; i < 4; i++) {
-      gtk_grid_attach(GTK_GRID(table_button), button_set_range[i], 1, i+1, 1, 1);
-      gtk_grid_attach(GTK_GRID(table_button), entry_range[i], 0, i+1, 1, 1);
+	gtk_grid_attach(GTK_GRID(table_button), button_set_range[i], 1, i+1, 1, 1);
+	gtk_grid_attach(GTK_GRID(table_button), entry_range[i], 0, i+1, 1, 1);
     }
     
     gtk_grid_attach(GTK_GRID(table_button), entry_delay, 0, 5, 1, 1);
