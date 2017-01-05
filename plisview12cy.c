@@ -1637,7 +1637,7 @@ int main(int argc, char *argv[])
     }
 
     int i = 0, j = 0;
-    int r = 0;
+    int ret = -1;
     int x = -1;
     int opt;
 	
@@ -1715,9 +1715,9 @@ int main(int argc, char *argv[])
   
 	  break;
       case 'g':
-	  goodness_lim = atoi(optarg);
-	  if ((goodness_lim != 0) || (goodness_lim != 2) || (goodness_lim != 3)) {
-	      fprintf(stderr, "-g flag error: -g GOODNESS_LIM (=0 write all signals, =2 write if 2 pairs of coinc, =3 do not write signals\n");
+	  goodness_lim = check_positive_int(optarg);
+	  if ((goodness_lim != 0) && (goodness_lim != 2) && (goodness_lim != 3)) {
+	      fprintf(stderr, "-g flag error (goodness_lim == %d): -g GOODNESS_LIM (=0 write all signals, =2 write if 2 pairs of coinc, =3 do not write signals\n", goodness_lim);
 	      FREE_DATA(4);
 	      FREE_FILENAME_TO_SAVE_STR();
 	      exit(-1);
@@ -1743,39 +1743,52 @@ int main(int argc, char *argv[])
     GtkTextBuffer *buffer_calc;
     gchar *tempstr;
 	
-    r = cyusb_open();
+    ret = cyusb_open();
+    if (ret < 0) {
+	perror("Error opening library\n");
+	FREE_DATA(4);
+	FREE_FILENAME_TO_SAVE_STR();
 
-    if ( r < 0 ) {
-      perror("Error opening library\n");
+	exit(EXIT_FAILURE);
     }
-    else if ( r == 0 ) {
-      perror("No device found!\n");
+    else if (ret == 0) {
+	perror("No device found!\n");
+    }
+    else if (ret > 1) {
+	perror("More than 1 devices of interest found. Disconnect unwanted devices\n");      
     }
 
-    if ( r > 1 ) {
-      perror("More than 1 devices of interest found. Disconnect unwanted devices\n");
-    }
+    if (ret > 0) {
+	h = cyusb_gethandle(0);
+	if (cyusb_getvendor(h) != 0x04b4) {
+	    perror("Cypress chipset not detected\n");
+	    FREE_DATA(4);
+	    FREE_FILENAME_TO_SAVE_STR();
+	    cyusb_close();
 
-    if(r > 0) {
-      h = cyusb_gethandle(0);
-      if ( cyusb_getvendor(h) != 0x04b4 ) {
-	perror("Cypress chipset not detected\n");
-	cyusb_close();
-      }
+	    exit(EXIT_FAILURE);
+	}
 
-      r = cyusb_kernel_driver_active(h, 0);
-      if ( r != 0 ) {
-	perror("kernel driver active. Exitting\n");
-	cyusb_close();
-      }
+	ret = cyusb_kernel_driver_active(h, 0);
+	if (ret != 0) {
+	    perror("kernel driver active. Exitting\n");
+	    FREE_DATA(4);
+	    FREE_FILENAME_TO_SAVE_STR();
+	    cyusb_close();
 
-      r = cyusb_claim_interface(h, 0);
-      if ( r != 0 ) {
-	perror("Error in claiming interface\n");
-	cyusb_close();
-      }
-      else printf("Successfully claimed interface\n");
-      cyusb_clear_halt(h, OUT_EP);
+	    exit(EXIT_FAILURE);
+	}
+
+	ret = cyusb_claim_interface(h, 0);
+	if (ret != 0) {
+	    perror("Error in claiming interface\n");
+	    FREE_DATA(4);
+	    FREE_FILENAME_TO_SAVE_STR();
+	    cyusb_close();
+
+	    exit(EXIT_FAILURE);
+	}
+	cyusb_clear_halt(h, OUT_EP);
     }
 	
     gtk_init (&argc, &argv);
@@ -1790,12 +1803,12 @@ int main(int argc, char *argv[])
     tempstr = g_strdup_printf("File name to save: %s", files.name_to_save);
     gtk_statusbar_push(GTK_STATUSBAR(main_statusbar), files.sb_context_id, tempstr);
     g_free(tempstr);
+    tempstr = NULL;
 
     coord_statusbar = gtk_statusbar_new();
 
     main_hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_container_add (GTK_CONTAINER (main_window), main_hbox);
-
 
     vbox_graph = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
     gtk_box_pack_start(GTK_BOX(main_hbox), vbox_graph, TRUE, TRUE, 0);
@@ -1840,12 +1853,11 @@ int main(int argc, char *argv[])
 	
     gtk_box_pack_start(GTK_BOX(vbox_graph), main_statusbar, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(vbox_graph), coord_statusbar, FALSE, FALSE, 0);
-	
-	
+		
     button_vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
     gtk_box_pack_start(GTK_BOX(main_hbox), button_vbox, FALSE, FALSE, 0);
 	
-	
+     
     button_read = gtk_button_new_with_label("Read data");
     g_signal_connect (G_OBJECT (button_read), "clicked",
 		      G_CALLBACK (button_read_cb), (gpointer) data);
@@ -1854,17 +1866,19 @@ int main(int argc, char *argv[])
     g_signal_connect (G_OBJECT (button_write), "clicked",
 		      G_CALLBACK (button_write_cb), (gpointer) NULL);
 	
-    for(i=0; i<4; i++) {
-      tempstr = g_strdup_printf("Set threshold #%d", i+1);
-      button_set_range[i] = gtk_button_new_with_label(tempstr);
-      g_signal_connect (G_OBJECT (button_set_range[i]), "clicked",
-			G_CALLBACK (button_range_cb), (gpointer) NULL);
-      g_free(tempstr);
+    for (i = 0; i < 4; i++) {
+	tempstr = g_strdup_printf("Set threshold #%d", i+1);
+	button_set_range[i] = gtk_button_new_with_label(tempstr);
+	g_signal_connect (G_OBJECT (button_set_range[i]), "clicked",
+			  G_CALLBACK (button_range_cb), (gpointer) NULL);
+	g_free(tempstr);
+	tempstr = NULL;
 		
-      entry_range[i] = gtk_entry_new();
-      tempstr = g_strdup_printf("%d", rangeset[i]);
-      gtk_entry_set_text(GTK_ENTRY(entry_range[i]), tempstr);
-      g_free(tempstr);
+	entry_range[i] = gtk_entry_new();
+	tempstr = g_strdup_printf("%d", rangeset[i]);
+	gtk_entry_set_text(GTK_ENTRY(entry_range[i]), tempstr);
+	g_free(tempstr);
+	tempstr = NULL;
     }
 	
     button_reset = gtk_button_new_with_label("Reset");
@@ -1882,6 +1896,7 @@ int main(int argc, char *argv[])
     tempstr = g_strdup_printf("%d", delay);
     gtk_entry_set_text(GTK_ENTRY(entry_delay), tempstr);
     g_free(tempstr);
+    tempstr = NULL;
     //    send_command("w", delay);
     //    send_command("r", 0);
 	
@@ -1905,6 +1920,7 @@ int main(int argc, char *argv[])
     tempstr = g_strdup_printf("%d cts/s | 0 s", intens);
     gtk_label_set_text(GTK_LABEL(label_intens), tempstr);
     g_free(tempstr);
+    tempstr = NULL;
 	
     adjust_scale = gtk_adjustment_new(SIZEOF_DATA(FILETYPE)/2 + 1.0, 25.0, SIZEOF_DATA(FILETYPE)/2+1.0, 1, 1.0, 1.0);
     scale_zoom = gtk_scale_new(GTK_ORIENTATION_HORIZONTAL, adjust_scale);
@@ -1945,7 +1961,7 @@ int main(int argc, char *argv[])
     gtk_grid_attach(GTK_GRID(table_button), button_read, 0, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(table_button), button_write, 1, 0, 1, 1);
 	
-    for(i=0; i<4; i++) {
+    for (i = 0; i < 4; i++) {
       gtk_grid_attach(GTK_GRID(table_button), button_set_range[i], 1, i+1, 1, 1);
       gtk_grid_attach(GTK_GRID(table_button), entry_range[i], 0, i+1, 1, 1);
     }
@@ -1974,7 +1990,6 @@ int main(int argc, char *argv[])
     gtk_grid_attach(GTK_GRID(table_button_zoom), button_ydown, 1, 11, 1, 1);
     gtk_grid_attach(GTK_GRID(table_button_zoom), button_rghtzoom, 2, 11, 1, 1);
     
-	
     gtk_box_pack_start(GTK_BOX(button_vbox), table_button, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(button_vbox), hr1, FALSE, FALSE, 2);
 	
