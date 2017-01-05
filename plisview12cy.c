@@ -535,6 +535,8 @@ void write_data_to_files(int *histo_en[], int *start[], int set)
 }
 
 
+#define FREE_IT(ptr, from_ind, to_ind) { int k = 0; do { for (k = from_ind; k < to_ind; k++) { free(ptr[k]); ptr[k] = NULL; } } while(0); }
+
 void *read_from_ep(void *user_data)
 {
     printf("read from ep\n");
@@ -552,12 +554,29 @@ void *read_from_ep(void *user_data)
 
     int *histo_en[4];
     for (i = 0; i < 4; i++) {
-        histo_en[i] = (int*)calloc(HIST_SIZE, sizeof(int));
+        histo_en[i] = (int *)calloc(HIST_SIZE, sizeof(int));
+	if (histo_en[i] == NULL) {
+	    free(buf);
+	    buf = NULL;
+	    FREE_IT(histo_en, 0, i);
+	
+	    return NULL;
+	}
     }
     int *start[12];
     for (i = 0; i < 12; i++) {
-        start[i] = (int*)calloc(HIST_SIZE, sizeof(int));
+        start[i] = (int *)calloc(HIST_SIZE, sizeof(int));
+	if (start[i] == NULL) {
+	    free(buf);
+	    buf = NULL;
+	    FREE_IT(histo_en, 0, 4);
+	    FREE_IT(start, 0, i);
+	    
+	    return NULL;
+	}
     }
+
+    int out_file_for_spk = -1;
 
     int s1 = 0, s2 = 0;
     int n1 = 0, n2 = 0;
@@ -576,7 +595,7 @@ void *read_from_ep(void *user_data)
     for (i = 0; i < 16; i++) {
         for (j = 0; j < 4; j++) {
             tempstr = g_strdup_printf("./fifos/%s_%d_%d", FIFO_FILE_NAME, i, j);
-            printf("Tempstr = %s\n", tempstr);
+            //printf("Tempstr = %s\n", tempstr);
             r = mknod(tempstr, S_IFIFO | 0666, 0);
             //if (r == -1) {
             //    perror("Error in mknod");
@@ -596,8 +615,7 @@ void *read_from_ep(void *user_data)
 	//	printf("File was removed\n");
     }
     
-    if (!inFile) inFile = open (files.name_to_save, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-	
+    inFile = open (files.name_to_save, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     //printf("TRUE %d; inFile = %d\n", ok_read, inFile);
     int out = -1;
     while (TRUE) {
@@ -613,12 +631,13 @@ void *read_from_ep(void *user_data)
             
 	    r = cyusb_bulk_transfer(h, IN_EP, buf, 4*SIZEOF_DATA(FILETYPE), &transferred, 0);
 	    if (r != 0) {
-				if(transferred != 4*SIZEOF_DATA(FILETYPE))
-					printf("Error in bulk transfer %d, transferred = %d \n", r, transferred);
-				cyusb_error(r);
-				cyusb_close();
-				exit(0);
-			}
+		if(transferred != 4*SIZEOF_DATA(FILETYPE))
+		    printf("Error in bulk transfer %d, transferred = %d \n", r, transferred);
+		return NULL;
+		//cyusb_error(r);
+		//cyusb_close();
+		//exit(EXIT_FAILURE);
+	    }
             
 			for (j = 0; j < 4; j++) {
                 d[j] = (buf[512*(j+1)-1] >> 6)+1;
