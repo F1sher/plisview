@@ -537,14 +537,19 @@ void write_data_to_files(int *histo_en[], int *start[], int set)
 
 void *read_from_ep(void *user_data)
 {
-	printf("read from ep\n");
-	static char reset_start = 1;
-	
-	int x, i, j, r, transferred = 0;
+    printf("read from ep\n");
+    static char reset_start = 1;
+    int x = 0;
+    int i = 0, j = 0;
+    int r = 0;
+    int transferred = 0;
     int set = 0;
-	unsigned char *buf = (unsigned char *)malloc(4*SIZEOF_DATA(FILETYPE)*sizeof(unsigned char));
-	int d[4] = {0, 0, 0, 0};
-    
+    int d[4] = {0};
+    unsigned char *buf = (unsigned char *)malloc(4*SIZEOF_DATA(FILETYPE)*sizeof(unsigned char));
+    if (buf == NULL) {
+	return NULL;
+    }
+
     int *histo_en[4];
     for (i = 0; i < 4; i++) {
         histo_en[i] = (int*)calloc(HIST_SIZE, sizeof(int));
