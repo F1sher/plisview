@@ -199,8 +199,6 @@ static gboolean graph_configure_event (GtkWidget         *widget,
                           GdkEventConfigure *event,
                           gpointer           data)
 {
-    printf("%s\n", __FUNCTION__);
-	
     GtkAllocation allocation;
 
     if (surface1) {
@@ -391,8 +389,11 @@ double area(int *a)
     //printf("i min s = %d, res = %.2f\n", i_min_s, cs[i_min_s]);
     
     free(a_clear);
+    a_clear = NULL;
     free(cTr);
+    cTr = NULL;
     free(cs);
+    cs = NULL;
     
     return fabs(res*EN_NORMAL);
 }
@@ -454,7 +455,7 @@ double cftrace_t(int *a)
     double x0 = -1.0;
     
     for (i = 10; i < 128; i++) {
-        if((a[i] <= edge) && (a[i-1] >= edge)) {
+        if ((a[i] <= edge) && (a[i-1] >= edge)) {
             k = (double)(a[i] - a[i-1]);
             b = (double)(a[i] - k*i);
         
@@ -555,28 +556,28 @@ void *read_from_ep(void *user_data)
     int *histo_en[4];
     for (i = 0; i < 4; i++) {
         histo_en[i] = (int *)calloc(HIST_SIZE, sizeof(int));
-	if (histo_en[i] == NULL) {
-	    free(buf);
-	    buf = NULL;
-	    FREE_IT(histo_en, 0, i);
-	
-	    return NULL;
-	}
+        if (histo_en[i] == NULL) {
+            free(buf);
+            buf = NULL;
+            FREE_IT(histo_en, 0, i);
+        
+            return NULL;
+        }
     }
     int *start[12];
     for (i = 0; i < 12; i++) {
         start[i] = (int *)calloc(HIST_SIZE, sizeof(int));
-	if (start[i] == NULL) {
-	    free(buf);
-	    buf = NULL;
-	    FREE_IT(histo_en, 0, 4);
-	    FREE_IT(start, 0, i);
-	    
-	    return NULL;
-	}
+        if (start[i] == NULL) {
+            free(buf);
+            buf = NULL;
+            FREE_IT(histo_en, 0, 4);
+            FREE_IT(start, 0, i);
+            
+            return NULL;
+        }
     }
 
-    int out_file_for_spk = -1;
+    int fd_out_spk = -1;
 
     int s1 = 0, s2 = 0;
     int n1 = 0, n2 = 0;
@@ -615,40 +616,60 @@ void *read_from_ep(void *user_data)
 	//	printf("File was removed\n");
     }
     
-    inFile = open (files.name_to_save, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    fd_out_spk = open (files.name_to_save, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (fd_out_spk == -1) {
+	perror("Error in open file for spks");
+	free(buf);
+	buf = NULL;
+	FREE_IT(histo_en, 0, 4);
+	FREE_IT(start, 0, 12);
+	
+	return NULL;
+    }
     //printf("TRUE %d; inFile = %d\n", ok_read, inFile);
+
     int out = -1;
     while (TRUE) {
 	out = control_test(CONTROL_REQUEST_TYPE_IN); 
 	if (out != 1) {
-	    times_asked++; 
+	    //the data on USB controller are not ready yet
+	    times_asked++;
+ 
 	    continue;
 	}
+
 	if (ok_read == 1) {
-            times_started++;
+        times_started++;
 			
 	    //memset(buf, 0, 4*SIZEOF_DATA(FILETYPE)*sizeof(unsigned char));
             
 	    r = cyusb_bulk_transfer(h, IN_EP, buf, 4*SIZEOF_DATA(FILETYPE), &transferred, 0);
 	    if (r != 0) {
-		if(transferred != 4*SIZEOF_DATA(FILETYPE))
-		    printf("Error in bulk transfer %d, transferred = %d \n", r, transferred);
+		if (transferred != 4*SIZEOF_DATA(FILETYPE)) {
+		    printf("Error in bulk transfer ret = %d, transferred = %d \n", r, transferred);
+		}
+		free(buf);
+		buf = NULL;
+		FREE_IT(histo_en, 0, 4);
+		FREE_IT(start, 0, 12);
+
 		return NULL;
 		//cyusb_error(r);
 		//cyusb_close();
 		//exit(EXIT_FAILURE);
 	    }
             
-			for (j = 0; j < 4; j++) {
-                d[j] = (buf[512*(j+1)-1] >> 6)+1;
+	    for (j = 0; j < 4; j++) {
+                //the number of worked detector
+		d[j] = (buf[512*(j + 1) - 1] >> 6) + 1;
             
-				for (i = 0; i <= SIZEOF_DATA(FILETYPE)/2-1; i++) {
-					data[j][i] = buf[2*i+512*j]+256*(buf[2*i+1+512*j]&0b00111111);
-				}
-				for (i = 0; i < SIZEOF_DATA(FILETYPE)/4; i++) {
-					swap(&(data[j][i]), &(data[j][SIZEOF_DATA(FILETYPE)/2-i-1]));
-				}
-                data[j][SIZEOF_DATA(FILETYPE)/2-1] = d[j];
+		for (i = 0; i <= SIZEOF_DATA(FILETYPE)/2-1; i++) {
+		    data[j][i] = buf[2*i + 512*j] + 256*(buf[2*i + 1 + 512*j] & 0b00111111);
+		}
+		for (i = 0; i < SIZEOF_DATA(FILETYPE)/4; i++) {
+		    swap( &(data[j][i]), &(data[j][SIZEOF_DATA(FILETYPE)/2 - i - 1]) );
+		}
+                data[j][SIZEOF_DATA(FILETYPE)/2 - 1] = d[j];
             
             // WRITE DATA TO FILE ON/OFF    
 			/*	if( write(inFile, data[j], sizeof(int)*SIZEOF_DATA(FILETYPE)/2) == -1 ) {
@@ -665,29 +686,29 @@ void *read_from_ep(void *user_data)
                 //if ( (check_overflow_in_signal(data[2*j]) == -1) || (check_overflow_in_signal(data[2*j+1]) == -1) ) {
                 //    continue;
                 //}
-            
+		
                 n1 = d[2*j];
                 n2 = d[2*j+1];
                 
                 s1 = (int)area(data[2*j]);
                 s2 = (int)area(data[2*j+1]);
                 
-                if (s1 >= EN_THRESHOLD && s1 < HIST_SIZE) {
+                if ( (s1 >= EN_THRESHOLD) && (s1 < HIST_SIZE) ) {
                     histo_en[n1-1][s1]++;
                 }
-                if (s2 >= EN_THRESHOLD && s2 < HIST_SIZE) {
+                if ( (s2 >= EN_THRESHOLD) && (s2 < HIST_SIZE) ) {
                     histo_en[n2-1][s2]++;
                 }
                 //printf("s1 = %d, s2 = %d, n1 = %d, n2 = %d\n", s1, s2, n1, n2); //CHANGE IT!!!
                 
-                if ( s1 >= EN_THRESHOLD && s1 < HIST_SIZE && s2 >= EN_THRESHOLD && s2 < HIST_SIZE ) {
+                if ( (s1 >= EN_THRESHOLD) && (s1 < HIST_SIZE) && (s2 >= EN_THRESHOLD) && (s2 < HIST_SIZE) ) {
                     start_a = cftrace_t(data[2*j]);
                     start_b = cftrace_t(data[2*j+1]);
-                    
+		    
                     diff_time = T_SCALE[0]*(start_a-start_b) + T_SCALE[0]*T_SCALE[1];
                     dtime = 0;
                     for (i = 0; i < HIST_SIZE-1; i++) {
-                        if (( definitely_greater_than(i*c, diff_time) ) && ( definitely_greater_than(diff_time, (i+1)*c) )) {
+                        if ( definitely_greater_than(i*c, diff_time) && definitely_greater_than(diff_time, (i + 1)*c) ) {
                             dtime = i;
                             break;
                         }
@@ -695,12 +716,12 @@ void *read_from_ep(void *user_data)
                     
                     //printf("dtime = %d s_a = %.2f s_b = %.2f\n", dtime, start_a, start_b);
 
-                    if ((n1 == 1) && (n2 == 2)) {
-                        if ((s1 >= EN_RANGE[0][0]) && (s1 <= EN_RANGE[0][1]) && (s2 >= EN_RANGE[1][2]) && (s2 <= EN_RANGE[1][3])) {
+                    if ( (n1 == 1) && (n2 == 2) ) {
+                        if ( (s1 >= EN_RANGE[0][0]) && (s1 <= EN_RANGE[0][1]) && (s2 >= EN_RANGE[1][2]) && (s2 <= EN_RANGE[1][3]) ) {
                             start[0][dtime]++; //T12
                             goodness++;
                         }
-                        else if ((s1 >= EN_RANGE[0][2]) && (s1 <= EN_RANGE[0][3]) && (s2 >= EN_RANGE[1][0]) && (s2 <= EN_RANGE[1][1])) {
+                        else if ( (s1 >= EN_RANGE[0][2]) && (s1 <= EN_RANGE[0][3]) && (s2 >= EN_RANGE[1][0]) && (s2 <= EN_RANGE[1][1]) ) {
                             start[1][dtime]++; // T21
                             goodness++;
                         }
@@ -713,7 +734,7 @@ void *read_from_ep(void *user_data)
                         else if ((s1 >= EN_RANGE[0][2]) && (s1 <= EN_RANGE[0][3]) && (s2 >= EN_RANGE[2][0]) && (s2 <= EN_RANGE[2][1])) {
                             start[3][dtime]++; //T31
                             goodness++;
-                            }
+			}
                     }
                     else if ((n1 == 1) && (n2 == 4)) {
                         if ((s1 >= EN_RANGE[0][0]) && (s1 <= EN_RANGE[0][1]) && (s2 >= EN_RANGE[3][2]) && (s2 <= EN_RANGE[3][3])) {
@@ -757,18 +778,18 @@ void *read_from_ep(void *user_data)
                     }
                 }
             }
-
+	    
             if (goodness >= goodness_lim) {
                 //printf("goodness = %d, s1 = %d, s2 = %d times = %d\n", goodness, s1, s2, 4*times_started-4);
                 for (j = 0; j < 4; j++) {
-                    if ( write(inFile, data[j], sizeof(int)*SIZEOF_DATA(FILETYPE)/2) == -1 ) {
+                    if ( write(fd_out_spk, data[j], sizeof(int)*SIZEOF_DATA(FILETYPE)/2) == -1 ) {
                         perror("Error in write data!");
-                        printf("fd = %d\n", inFile);
-                        exit(1);
+			
+                        exit(EXIT_FAILURE);
                     }
                 }
             }
-
+	    
             //Write to FIFO fps
             for (i = 0; i < 16; i++) {
                 //printf("written\n");
@@ -798,24 +819,14 @@ void *read_from_ep(void *user_data)
     }
 	
     printf("free\n");
-	free(buf);
+    free(buf);
+    buf = NULL;
     printf("free buf\n");
-    for (i = 0; i < 4; i++) {
-        printf("free histo en i = %d\n", i);
-        if (histo_en[i] != NULL) {
-            free(histo_en[i]);
-            histo_en[i] = NULL;
-        }
-    }
-    for (i = 0; i < 12; i++) {
-        if (start[i] != NULL) {
-            free(start[i]);
-            start[i] = NULL;
-            printf("free start i = %d\n", i);
-        }
-    }
-    printf("free 32\n");
-	close(inFile);
+    
+    FREE_IT(histo_en, 0, 4);
+    FREE_IT(start, 0, 12);
+
+    close(fd_out_spk);
     
     for (i = 0; i < 16; i++) {
         for (j = 0; j < 4; j++) {
@@ -823,6 +834,7 @@ void *read_from_ep(void *user_data)
         }
     }
     printf("free end\n");
+    
     return NULL;
 }
 
@@ -892,7 +904,6 @@ int send_command(const char *command, int args)
             perror("Error in set range!");
             printf("transferred %d bytes\n", transferred);
         }
-        free(buf);
     }
     else if (!strcmp(command, "r")) {
         buf[0] = 7;
@@ -904,7 +915,6 @@ int send_command(const char *command, int args)
             cyusb_close();
             perror("Error in reset!");
         }
-        free(buf);
         
         printf("reset\n");
 	}
@@ -919,7 +929,6 @@ int send_command(const char *command, int args)
             cyusb_close();
             perror("Error in set delay!");
         }
-        free(buf);
         
         printf("wait buf[2] = %u buf[3] = %u\n", buf[2], buf[3]);
     }
@@ -933,7 +942,6 @@ int send_command(const char *command, int args)
             cyusb_close();
             perror("Error in test!");
         }
-        free(buf);
 			
         printf("test");
     }
@@ -947,7 +955,6 @@ int send_command(const char *command, int args)
             cyusb_close();
             perror("Error in test!");
         }
-        free(buf);
 			
         printf("coinc on\n");
     }
@@ -961,10 +968,12 @@ int send_command(const char *command, int args)
             cyusb_close();
             perror("Error in test!");
         }
-        free(buf);
 			
         printf("coinc off\n");
 	}
+    
+    free(buf);
+    buf = NULL;
 }
 
 
